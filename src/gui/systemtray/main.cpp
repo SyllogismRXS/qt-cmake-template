@@ -39,25 +39,34 @@
  **
  ****************************************************************************/
 
- #include <QtGui>
+#include <QtGui>
 
- #include "window.h"
+#include "window.h"
 
- int main(int argc, char *argv[])
- {
+#ifdef Q_WS_MAC
+#include <qt_cmake_template/mac/CocoaInitializer.h>
+#endif
+
+
+int main(int argc, char *argv[])
+{
      Q_INIT_RESOURCE(systray);
 
      QApplication app(argc, argv);
 
      if (!QSystemTrayIcon::isSystemTrayAvailable()) {
-         QMessageBox::critical(0, QObject::tr("Systray"),
-                               QObject::tr("I couldn't detect any system tray "
-                                           "on this system."));
-         return 1;
+          QMessageBox::critical(0, QObject::tr("Systray"),
+                                QObject::tr("I couldn't detect any system tray "
+                                            "on this system."));
+          return 1;
      }
      QApplication::setQuitOnLastWindowClosed(false);
+
+#ifdef Q_WS_MAC
+     CocoaInitializer cocoaInitiarizer_;
+#endif
 
      Window window;
      window.show();
      return app.exec();
- }
+}

@@ -76,4 +76,10 @@ ADD_DEFINITIONS(${QT_DEFINITIONS})
 
 include_directories(${QT_INCLUDE_DIR})
 
+if( WIN32 )
+    message("Hello Windows users")
+elseif( APPLE )
+    message("Hello Mac users")    
+endif()
+
 add_subdirectory(src)

@@ -29,5 +29,11 @@ add_executable(${APP_NAME}
   )
 
 target_link_libraries(${APP_NAME} 
-  ${QT_LIBRARIES}
+  ${QT_LIBRARIES}  
   )
+
+if (APPLE)
+   target_link_libraries(${APP_NAME}
+        my_mac_lib
+   )                                      
+endif()

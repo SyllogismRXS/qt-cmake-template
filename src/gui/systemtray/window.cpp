@@ -39,12 +39,13 @@
  **
  ****************************************************************************/
 
- #include <QtGui>
+#include <QtGui>
+#include <iostream>
 
- #include "window.h"
+#include "window.h"
 
- Window::Window()
- {
+Window::Window()
+{
      createIconGroupBox();
      createMessageGroupBox();
 
@@ -72,71 +73,75 @@
 
      setWindowTitle(tr("Systray"));
      resize(400, 300);
- }
+}
 
- void Window::setVisible(bool visible)
- {
+void Window::setVisible(bool visible)
+{
      minimizeAction->setEnabled(visible);
      maximizeAction->setEnabled(!isMaximized());
      restoreAction->setEnabled(isMaximized() || !visible);
      QDialog::setVisible(visible);
- }
+}
 
- void Window::closeEvent(QCloseEvent *event)
- {
+void Window::closeEvent(QCloseEvent *event)
+{
+     std::cout << "odom: " << car_.odometer() << std::endl;
      if (trayIcon->isVisible()) {
-         QMessageBox::information(this, tr("Systray"),
-                                  tr("The program will keep running in the "
-                                     "system tray. To terminate the program, "
-                                     "choose <b>Quit</b> in the context menu "
-                                     "of the system tray entry."));
-         hide();
-         event->ignore();
+          QMessageBox::information(this, tr("Systray"),
+                                   tr("The program will keep running in the "
+                                      "system tray. To terminate the program, "
+                                      "choose <b>Quit</b> in the context menu "
+                                      "of the system tray entry."));
+          hide();
+          event->ignore();
      }
- }
+}
 
- void Window::setIcon(int index)
- {
+void Window::setIcon(int index)
+{
      QIcon icon = iconComboBox->itemIcon(index);
      trayIcon->setIcon(icon);
      setWindowIcon(icon);
 
      trayIcon->setToolTip(iconComboBox->itemText(index));
- }
 
- void Window::iconActivated(QSystemTrayIcon::ActivationReason reason)
- {
+     car_.gas();
+     std::cout << "set icon" << std::endl;
+}
+
+void Window::iconActivated(QSystemTrayIcon::ActivationReason reason)
+{
      switch (reason) {
      case QSystemTrayIcon::Trigger:
      case QSystemTrayIcon::DoubleClick:
-         iconComboBox->setCurrentIndex((iconComboBox->currentIndex() + 1)
-                                       % iconComboBox->count());
-         break;
+          iconComboBox->setCurrentIndex((iconComboBox->currentIndex() + 1)
+                                        % iconComboBox->count());
+          break;
      case QSystemTrayIcon::MiddleClick:
-         showMessage();
-         break;
+          showMessage();
+          break;
      default:
-         ;
+          ;
      }
- }
+}
 
- void Window::showMessage()
- {
+void Window::showMessage()
+{
      QSystemTrayIcon::MessageIcon icon = QSystemTrayIcon::MessageIcon(
-             typeComboBox->itemData(typeComboBox->currentIndex()).toInt());
+          typeComboBox->itemData(typeComboBox->currentIndex()).toInt());
      trayIcon->showMessage(titleEdit->text(), bodyEdit->toPlainText(), icon,
                            durationSpinBox->value() * 1000);
- }
+}
 
- void Window::messageClicked()
- {
+void Window::messageClicked()
+{
      QMessageBox::information(0, tr("Systray"),
                               tr("Sorry, I already gave what help I could.\n"
                                  "Maybe you should try asking a human?"));
- }
+}
 
- void Window::createIconGroupBox()
- {
+void Window::createIconGroupBox()
+{
      iconGroupBox = new QGroupBox(tr("Tray Icon"));
 
      iconLabel = new QLabel("Icon:");
@@ -155,10 +160,10 @@
      iconLayout->addStretch();
      iconLayout->addWidget(showIconCheckBox);
      iconGroupBox->setLayout(iconLayout);
- }
+}
 
- void Window::createMessageGroupBox()
- {
+void Window::createMessageGroupBox()
+{
      messageGroupBox = new QGroupBox(tr("Balloon Message"));
 
      typeLabel = new QLabel(tr("Type:"));
@@ -166,14 +171,14 @@
      typeComboBox = new QComboBox;
      typeComboBox->addItem(tr("None"), QSystemTrayIcon::NoIcon);
      typeComboBox->addItem(style()->standardIcon(
-             QStyle::SP_MessageBoxInformation), tr("Information"),
-             QSystemTrayIcon::Information);
+                                QStyle::SP_MessageBoxInformation), tr("Information"),
+                           QSystemTrayIcon::Information);
      typeComboBox->addItem(style()->standardIcon(
-             QStyle::SP_MessageBoxWarning), tr("Warning"),
-             QSystemTrayIcon::Warning);
+                                QStyle::SP_MessageBoxWarning), tr("Warning"),
+                           QSystemTrayIcon::Warning);
      typeComboBox->addItem(style()->standardIcon(
-             QStyle::SP_MessageBoxCritical), tr("Critical"),
-             QSystemTrayIcon::Critical);
+                                QStyle::SP_MessageBoxCritical), tr("Critical"),
+                           QSystemTrayIcon::Critical);
      typeComboBox->setCurrentIndex(1);
 
      durationLabel = new QLabel(tr("Duration:"));
@@ -214,10 +219,10 @@
      messageLayout->setColumnStretch(3, 1);
      messageLayout->setRowStretch(4, 1);
      messageGroupBox->setLayout(messageLayout);
- }
+}
 
- void Window::createActions()
- {
+void Window::createActions()
+{
      minimizeAction = new QAction(tr("Mi&nimize"), this);
      connect(minimizeAction, SIGNAL(triggered()), this, SLOT(hide()));
 
@@ -229,10 +234,10 @@
 
      quitAction = new QAction(tr("&Quit"), this);
      connect(quitAction, SIGNAL(triggered()), qApp, SLOT(quit()));
- }
+}
 
- void Window::createTrayIcon()
- {
+void Window::createTrayIcon()
+{
      trayIconMenu = new QMenu(this);
      trayIconMenu->addAction(minimizeAction);
      trayIconMenu->addAction(maximizeAction);
@@ -242,4 +247,4 @@
 
      trayIcon = new QSystemTrayIcon(this);
      trayIcon->setContextMenu(trayIconMenu);
- }
+}
