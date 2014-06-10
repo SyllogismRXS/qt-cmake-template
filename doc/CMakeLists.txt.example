@@ -1,0 +1,235 @@
+CMAKE_MINIMUM_REQUIRED( VERSION 2.8.6 )
+
+##################################################################################################################################
+
+MACRO( CHOOSE_QT path )
+    FILE( GLOB QTROOTS "${path}/bin" )
+    FIND_PROGRAM( QT_QMAKE_EXECUTABLE NAMES qmake qmake4 qmake-qt4 qmake-mac PATHS ${QTROOTS} )
+ENDMACRO( CHOOSE_QT path )
+
+MACRO( ADD_FILES_TO_FILTER rootFilterName rootFilterPath files )
+    FOREACH( curFile ${files} )
+        FILE( RELATIVE_PATH curFilter "${CMAKE_CURRENT_SOURCE_DIR}/${rootFilterPath}" "${CMAKE_CURRENT_SOURCE_DIR}/${curFile}" )
+        FILE( RELATIVE_PATH test "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/${curFile}" )
+        GET_FILENAME_COMPONENT( curFilter ${curFilter} PATH )
+        SET( curFilter "${rootFilterName}/${curFilter}" )
+        STRING( REPLACE "/" "\\\\" curFilter ${curFilter} )
+        SOURCE_GROUP( ${curFilter} FILES ${curFile} )
+    ENDFOREACH( curFile )
+ENDMACRO( ADD_FILES_TO_FILTER rootFilterName rootFilterPath files )
+
+MACRO( TO_RELATIVE_PATHS filePaths )
+    SET( resPaths "" )
+    FOREACH( curPath ${${filePaths}} )
+        FILE( RELATIVE_PATH relPath ${CMAKE_CURRENT_SOURCE_DIR} ${curPath} )
+        SET( resPaths ${resPaths} ${relPath} )
+    ENDFOREACH( curPath )
+    SET( ${filePaths} ${resPaths} )
+ENDMACRO( TO_RELATIVE_PATHS filePaths )
+
+MACRO( COPY_TO_BUNDLE resourcePath bundlePath )
+    LIST( APPEND BUNDLE_COPY_RESOURCES ${resourcePath} )
+    SET_SOURCE_FILES_PROPERTIES( ${resourcePath} PROPERTIES MACOSX_PACKAGE_LOCATION ${bundlePath} )
+ENDMACRO( COPY_TO_BUNDLE )
+
+MACRO( ADD_FRAMEWORK fwname fwpath appname )
+    TARGET_LINK_LIBRARIES( ${appname} ${fwpath}/${fwname} )
+    MESSAGE( STATUS "Framework ${fwname} found at ${fwpath}" )
+ENDMACRO()
+
+MACRO( ADD_SYSTEM_FRAMEWORK fwname appname )
+    FIND_LIBRARY( FRAMEWORK_${fwname} NAMES ${fwname} PATHS ${CMAKE_OSX_SYSROOT}/System/Library PATH_SUFFIXES Frameworks NO_DEFAULT_PATH )
+    if( ${FRAMEWORK_${fwname}} STREQUAL FRAMEWORK_${fwname}-NOTFOUND )
+        MESSAGE( ERROR ": Framework ${fwname} not found" )
+    else()
+        ADD_FRAMEWORK( ${fwname} ${FRAMEWORK_${fwname}} ${appname} )
+    endif()
+ENDMACRO( ADD_SYSTEM_FRAMEWORK )
+
+##################################################################################################################################
+
+# Define project settings
+PROJECT( TrackerSoftware )
+SET( APP_NAME "TRACKer" )
+
+# Find Qt library
+if( WIN32 )
+    CHOOSE_QT( "${CMAKE_CURRENT_SOURCE_DIR}/cxx/thirdparty/Qt" )
+endif( WIN32 )
+SET( CMAKE_AUTOMOC TRUE )
+FIND_PACKAGE( Qt4 REQUIRED )
+
+# Find Boost library
+if( WIN32 )
+    SET( BOOST_ROOT "cxx/thirdparty/boost" )
+elseif( APPLE )
+    SET( BOOST_ROOT "osx/FRP/vendors/libraries/include/boost" )
+endif( WIN32 )
+FIND_PACKAGE( Boost REQUIRED )
+
+# Collect all required files for build
+FILE( GLOB_RECURSE headers RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "cxx/src/RTCS/include/*.h" )
+FILE( GLOB_RECURSE sources RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "cxx/src/RTCS/src/*.cpp" )
+FILE( GLOB_RECURSE resources RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "cxx/src/*.qrc" )
+FILE( GLOB_RECURSE win_resources RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "cxx/src/*.rc" )
+FILE( GLOB_RECURSE forms RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "cxx/src/*.ui" )
+SET( thirdparty_sources "cxx/thirdparty/SimpleCrypt/simplecrypt.cpp" )
+if( APPLE )
+    FILE( GLOB_RECURSE mac_sources RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "cxx/src/RTCS/src/*.m" )
+    LIST( APPEND sources ${mac_sources} )
+endif( APPLE )
+
+# Preprocess forms
+FILE( RELATIVE_PATH buildDir ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR} )
+QT4_WRAP_UI( form_headers ${forms} )
+TO_RELATIVE_PATHS( form_headers )
+ADD_FILES_TO_FILTER( "Forms" "${buildDir}/src/RTCS/include" "${form_headers}" )
+
+# Preprocess resources
+QT4_ADD_RESOURCES( resources_rcc ${resources} )
+TO_RELATIVE_PATHS( resources_rcc )
+ADD_FILES_TO_FILTER( "Resources" "${buildDir}" "${resources_rcc}" )
+
+# Mark all sources as ObjectiveC++
+if( APPLE )
+    foreach( curSource ${sources} )
+        SET_SOURCE_FILES_PROPERTIES( ${curSource} PROPERTIES COMPILE_FLAGS "-x objective-c++" )
+    endforeach( curSource )
+endif( APPLE )
+
+# Set all link libraries directories - it should be specified Before any targets creation
+if( WIN32 )
+    LINK_DIRECTORIES( "${CMAKE_CURRENT_SOURCE_DIR}/cxx/thirdparty/boost/lib" )
+    LINK_DIRECTORIES( "${CMAKE_CURRENT_SOURCE_DIR}/cxx/thirdparty/libtwitcurl/lib/x86" )
+    LINK_DIRECTORIES( "${CMAKE_CURRENT_SOURCE_DIR}/cxx/thirdparty/id3lib/lib/x86" )
+    LINK_DIRECTORIES( "${CMAKE_CURRENT_SOURCE_DIR}/cxx/thirdparty/curl/curl/lib/lib/x86" )
+    LINK_DIRECTORIES( "${CMAKE_CURRENT_SOURCE_DIR}/cxx/thirdparty/log4qt/lib/x86" )
+    LINK_DIRECTORIES( "${CMAKE_CURRENT_SOURCE_DIR}/cxx/thirdparty/WinSparkle/lib/x86/$(ConfigurationName)" )
+    LINK_DIRECTORIES( "${CMAKE_CURRENT_SOURCE_DIR}/cxx/thirdparty/fervor-auto/lib/$(Configuration)" )
+    LINK_DIRECTORIES( "${CMAKE_CURRENT_SOURCE_DIR}/cxx/thirdparty/quazip/lib/$(Configuration)" )
+elseif( APPLE )
+    LINK_DIRECTORIES( "${CMAKE_CURRENT_SOURCE_DIR}/osx/FRP/vendors/libraries/lib" )
+endif( WIN32 )
+
+# Set up Bundle settings for the Mac OSX
+if( APPLE )
+    SET( MACOSX_BUNDLE true )
+    SET( MACOSX_BUNDLE_SHORT_VERSION_STRING 0.7-beta2 )
+    SET( MACOSX_BUNDLE_VERSION 0.7-beta2 )
+    SET( MACOSX_BUNDLE_LONG_VERSION_STRING Version 0.7-beta2 )
+    #SET( CMAKE_OSX_ARCHITECTURES ppc;i386 ) #Comment out if not universal binary
+
+    # Add a bundle icon
+    SET( MACOSX_BUNDLE_ICON_FILE multimonIcon.icns )
+    COPY_TO_BUNDLE( "osx/FRP/${MACOSX_BUNDLE_ICON_FILE}" Resources )
+
+    # Copy all private frameworks into the bundle
+    #COPY_TO_BUNDLE( "osx/FRP/vendors/libraries/lib/Sparkle.framework" Frameworks )
+    #foreach( curFramework ${QT_LIBRARIES} )
+        #COPY_TO_BUNDLE( "${curFramework}" Frameworks )
+    #endforeach( curFramework )
+
+    # Fixup bundle, copy dynamic libraries into app bundle
+    SET( EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR}/out )
+    MESSAGE( STATUS "!!! BUNDLE PATH: ${EXECUTABLE_OUTPUT_PATH}/${APP_NAME}.app" )
+    SET( APPS "\${CMAKE_INSTALL_PREFIX}/${APP_NAME}.app" ) # paths to executables
+    SET( DIRS "${CMAKE_SOURCE_DIR}/osx/FRP/vendors/libraries/lib" ) # directories to search for prerequisites
+    INSTALL( CODE "
+        include(BundleUtilities)
+        fixup_bundle(\"${APPS}\" \"\" \"${DIRS}\")
+    ")
+endif( APPLE )
+
+# Create executable
+if( WIN32 )
+    ADD_EXECUTABLE( Tracker WIN32 ${headers} ${sources} ${form_headers} ${resources_rcc} ${thirdparty_sources} ${win_resources} )
+    SET_TARGET_PROPERTIES( Tracker PROPERTIES OUTPUT_NAME "tracker" )
+    SET_TARGET_PROPERTIES( Tracker PROPERTIES COMPILE_FLAGS "/Zc:wchar_t-" )
+elseif( APPLE )
+    ADD_EXECUTABLE( Tracker MACOSX_BUNDLE ${headers} ${sources} ${form_headers} ${resources_rcc} ${thirdparty_sources} ${BUNDLE_COPY_RESOURCES} )
+    SET_TARGET_PROPERTIES( Tracker PROPERTIES OUTPUT_NAME ${APP_NAME} )
+    SET( CMAKE_XCODE_ATTRIBUTE_GCC_VERSION "com.apple.compilers.llvm.clang.1_0" )
+endif( WIN32 )
+
+# Set filters for project according to its namespaces
+ADD_FILES_TO_FILTER( "Headers" "cxx/src/RTCS/include" "${headers}" )
+ADD_FILES_TO_FILTER( "Sources" "cxx/src/RTCS/src" "${sources}" )
+ADD_FILES_TO_FILTER( "Resources" "cxx/src/RTCS/rc" "${win_resources}" )
+ADD_FILES_TO_FILTER( "Thirdparty" "cxx/thirdparty" "${thirdparty_sources}" )
+
+# Set additional include directories
+INCLUDE_DIRECTORIES( ${CMAKE_CURRENT_BINARY_DIR} )
+INCLUDE_DIRECTORIES( "cxx/src" )
+INCLUDE_DIRECTORIES( "cxx/src/RTCS/include" )
+INCLUDE_DIRECTORIES( "cxx/thirdparty" )
+
+# Configure Qt
+SET( QT_USE_QTNETWORK TRUE )
+SET( QT_USE_QTSQL TRUE )
+SET( QT_USE_QTSCRIPT TRUE )
+SET( QT_USE_QTXML TRUE )
+SET( QT_USE_QTWEBKIT TRUE )
+INCLUDE( ${QT_USE_FILE} )
+ADD_DEFINITIONS( ${QT_DEFINITIONS} )
+TARGET_LINK_LIBRARIES( Tracker ${QT_LIBRARIES} )
+TARGET_LINK_LIBRARIES( Tracker ${QT_QTMAIN_LIBRARY} )
+
+# Add boost support
+INCLUDE_DIRECTORIES( ${Boost_INCLUDE_DIR} )
+TARGET_LINK_LIBRARIES( Tracker ${Boost_LIBRARIES} )
+
+# Add other libs include dirs
+INCLUDE_DIRECTORIES( "cxx/thirdparty/SimpleCrypt" )
+INCLUDE_DIRECTORIES( "cxx/thirdparty/id3lib/include" )
+INCLUDE_DIRECTORIES( "cxx/thirdparty/libtwitcurl" )
+INCLUDE_DIRECTORIES( "cxx/thirdparty/curl/curl/include" )
+INCLUDE_DIRECTORIES( "cxx/thirdparty/log4qt/include" )
+INCLUDE_DIRECTORIES( "cxx/thirdparty/fervor-auto" )
+
+# Add other libs to link
+if( WIN32 )
+    TARGET_LINK_LIBRARIES( Tracker debug "twitcurlD.lib" )
+    TARGET_LINK_LIBRARIES( Tracker debug "id3libD.lib" )
+    TARGET_LINK_LIBRARIES( Tracker debug "libcurlD.lib" )
+    TARGET_LINK_LIBRARIES( Tracker debug "log4qtD.lib" )
+
+    TARGET_LINK_LIBRARIES( Tracker optimized "twitcurl.lib" )
+    TARGET_LINK_LIBRARIES( Tracker optimized "id3lib.lib" )
+    TARGET_LINK_LIBRARIES( Tracker optimized "libcurl.lib" )
+    TARGET_LINK_LIBRARIES( Tracker optimized "log4qt.lib" )
+
+    TARGET_LINK_LIBRARIES( Tracker "fervor.lib" )
+    TARGET_LINK_LIBRARIES( Tracker "quazip.lib" )
+
+    TARGET_LINK_LIBRARIES( Tracker "Wininet.lib" )
+    TARGET_LINK_LIBRARIES( Tracker "ws2_32.lib" )
+    TARGET_LINK_LIBRARIES( Tracker "winmm.lib" )
+    TARGET_LINK_LIBRARIES( Tracker "wldap32.lib" )
+    TARGET_LINK_LIBRARIES( Tracker "Shell32.lib" )
+    TARGET_LINK_LIBRARIES( Tracker "Version.lib" )
+elseif( APPLE )
+    TARGET_LINK_LIBRARIES( Tracker "libiconv.a" )
+    TARGET_LINK_LIBRARIES( Tracker "libid3.a" )
+    TARGET_LINK_LIBRARIES( Tracker "liblibtwitcurl.a" )
+    TARGET_LINK_LIBRARIES( Tracker "libLog4Qt.a" )
+    TARGET_LINK_LIBRARIES( Tracker "libz.a" )
+    TARGET_LINK_LIBRARIES( Tracker "libboost_date_time.a" )
+    TARGET_LINK_LIBRARIES( Tracker "libboost_iostreams.a" )
+    TARGET_LINK_LIBRARIES( Tracker "libboost_serialization.a" )
+    TARGET_LINK_LIBRARIES( Tracker "libboost_thread-mt.a" )
+    TARGET_LINK_LIBRARIES( Tracker "curl" )
+
+    # Add frameworks
+    ADD_FRAMEWORK( "Sparkle.framework" "${CMAKE_CURRENT_SOURCE_DIR}/osx/FRP/vendors/libraries/lib" Tracker )
+
+    # Add system frameworks
+    ADD_SYSTEM_FRAMEWORK( Foundation Tracker )
+    ADD_SYSTEM_FRAMEWORK( CoreFoundation Tracker )
+    ADD_SYSTEM_FRAMEWORK( AppKit Tracker )
+endif( WIN32 )
+
+# Add defines
+ADD_DEFINITIONS( -DQUAZIP_STATIC )
+ADD_DEFINITIONS( -DBUILDING_LIBCURL )
+ADD_DEFINITIONS( -DID3LIB_LINKOPTION=1 )
+ADD_DEFINITIONS( -DUNICODE -D_UNICODE ) #enable unicode support
